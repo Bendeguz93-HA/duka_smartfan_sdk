@@ -1,4 +1,6 @@
-"""Implements the duka smartfan wifi device class """
+"""Implements the duka smartfan wifi device class"""
+
+import asyncio
 import time
 
 
@@ -87,3 +89,8 @@ class Device:
         timeout = time.time() + 2
         while self.firmware_version is None and time.time() < timeout:
             time.sleep(0.1)
+
+    async def wait_for_initialize_async(self):
+        timeout = time.time() + 2
+        while self.firmware_version is None and time.time() < timeout:
+            await asyncio.sleep(0.1)

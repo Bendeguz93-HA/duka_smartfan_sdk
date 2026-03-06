@@ -1,4 +1,5 @@
-"""Implements a client for making a udp connection to the duka one devices """
+"""Implements a client for making a udp connection to the duka one devices"""
+
 import socket
 import threading
 import time
@@ -55,7 +56,7 @@ class DukaClient:
             del self._devices[device_id]
         return device
 
-    def get_device(self, device_id: str) -> Device:
+    def get_device(self, device_id: str) -> Device | None:
         """Get a device by device id."""
         if device_id not in self._devices:
             return None
@@ -115,7 +116,7 @@ class DukaClient:
         Returns None if the device does not exist
         Returns the Device object if it exist
         """
-        device: Device = self.get_device(device_id)
+        device: Device | None = self.get_device(device_id)
         # Is the device already added
         if device is not None:
             return device
@@ -255,7 +256,7 @@ class DukaClient:
         """Update the device with data received. Called by the dukaclient"""
         haschange = False
         if device._ip_address is not None and ip_address != device._ip_address:
-            self._ip_address = ip_address
+            device._ip_address = ip_address
             haschange = True
         # use fan speed as proxy for "active"
         if packet.fan_speed is not None and bool(packet.fan_speed) != device._is_active:

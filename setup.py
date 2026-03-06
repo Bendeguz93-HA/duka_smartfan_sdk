@@ -1,11 +1,12 @@
 """
 Setup of the duka_smartfan_sdk module
 """
+
 from setuptools import setup
 
 setup(
     name="duka_smartfan_sdk",
-    version="0.2.0",
+    version="0.2.1",
     description="Duka Smartfan Wifi ventilation SDK",
     long_description=(
         "SDK for connection to the Duka Smartfan Wifi ventilation. "
