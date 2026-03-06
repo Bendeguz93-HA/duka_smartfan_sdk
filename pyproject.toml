@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "duka_smartfan_sdk"
+version = "0.2.1"
+description = "Duka Smartfan Wifi ventilation SDK"
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.12"
+authors = [
+    { name = "Jens Østergaard Nielsen" },
+    { name = "Søren Howe Gersager" },
+]
+
+[project.urls]
+Homepage = "https://github.com/syre/duka_smartfan_sdk"
+Repository = "https://github.com/syre/duka_smartfan_sdk"
+Issues = "https://github.com/syre/duka_smartfan_sdk/issues"
