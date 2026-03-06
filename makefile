@@ -2,7 +2,7 @@ build:
 	rm -rf build
 	rm -rf duka_smartfan_sdk.egg-info
 	rm -rf dist
-	python setup.py sdist bdist_wheel
+	python -m build
 
 clean:
 	rm -rf build
@@ -11,4 +11,3 @@ clean:
 
 upload:
 	twine upload --repository pypi dist/*
-

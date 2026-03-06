@@ -34,7 +34,7 @@ class DukaClient:
     def add_device(
         self,
         device_id: str,
-        password: str = None,
+        password: str | None = None,
         ip_address: str = "<broadcast>",
         onchange=None,
     ) -> Device:
@@ -49,8 +49,10 @@ class DukaClient:
         self.__send_data(device, packet.data)
         return device
 
-    def remove_device(self, device_id):
-        """Remove an existing device"""
+    def remove_device(self, device_id: str | Device):
+        """Remove an existing device. Accepts a device ID string or a Device object."""
+        if isinstance(device_id, Device):
+            device_id = device_id.device_id
         device: Device = self.get_device(device_id)
         if device is not None:
             del self._devices[device_id]
@@ -110,8 +112,11 @@ class DukaClient:
         self.__send_data(device, data)
 
     def validate_device(
-        self, device_id: str, password: str = None, ip_address: str = "<broadcast>"
-    ) -> Device:
+        self,
+        device_id: str,
+        password: str | None = None,
+        ip_address: str = "<broadcast>",
+    ) -> Device | None:
         """Validate if a device exist and responds.
         Returns None if the device does not exist
         Returns the Device object if it exist

@@ -1,4 +1,5 @@
 """Implements a class for the UDP data packet"""
+
 from .dukapacket import DukaPacket
 
 
@@ -110,9 +111,11 @@ class ResponsePacket(DukaPacket):
 
     def debug_parameter(self, parameter, size) -> str:
         return ", ".join(
-            parameter,
-            size,
-            sum([self._data[self._pos + x] << 8 * x for x in range(size)]),
+            [
+                str(parameter),
+                str(size),
+                str(sum([self._data[self._pos + x] << 8 * x for x in range(size)])),
+            ]
         )
 
     def read_parameters(self) -> bool:
