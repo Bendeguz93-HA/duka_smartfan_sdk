@@ -18,3 +18,13 @@ authors = [
 Homepage = "https://github.com/syre/duka_smartfan_sdk"
 Repository = "https://github.com/syre/duka_smartfan_sdk"
 Issues = "https://github.com/syre/duka_smartfan_sdk/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3,<9",
+    "pytest-cov>=6,<7",
+]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers"
+testpaths = ["tests"]
