@@ -8,7 +8,6 @@ from duka_smartfan_sdk.device import Device
 from duka_smartfan_sdk.dukapacket import DukaPacket
 from duka_smartfan_sdk.responsepacket import ResponsePacket
 
-
 DEVICE_ID = "1234567890123456"
 PASSWORD = "1111"
 KNOWN_RESPONSE = bytes.fromhex(
@@ -63,9 +62,7 @@ def test_search_packet_encoding() -> None:
     packet = DukaPacket()
     packet.initialize_search_cmd()
 
-    assert packet.data.hex() == (
-        "fdfd021044454641554c545f444556494345494400017c3005"
-    )
+    assert packet.data.hex() == ("fdfd021044454641554c545f444556494345494400017c3005")
 
 
 def test_checksum_is_little_endian_sum_from_protocol_version() -> None:

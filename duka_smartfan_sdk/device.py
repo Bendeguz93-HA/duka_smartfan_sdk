@@ -84,7 +84,7 @@ class Device:
     def is_initialized(self) -> bool:
         """Returns True if the device has initilized.
 
-        The device is initialized once the get initial get firmware packet has been received.
+        Initialization completes after the initial firmware response is received.
         This packet is sent when the device is added to the client
         """
         return self.firmware_version is not None

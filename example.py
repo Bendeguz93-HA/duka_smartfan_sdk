@@ -3,6 +3,7 @@ Create a file called ".deviceid" in the current folder.
 This file should contain  the duka smartfan wifi device id.
 You can see the duka smartfan wifi device id in the duka app.
 """
+
 import sys
 import time
 
@@ -33,7 +34,7 @@ def main():
     time.sleep(5)
 
     # read the device id
-    with open(".deviceid", "r") as file:
+    with open(".deviceid") as file:
         device_id = file.readline().replace("\n", "")
     # initialize the client and add the device
     device: Device = client.validate_device(device_id)

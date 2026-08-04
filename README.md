@@ -10,7 +10,42 @@ The module implements:
 
 * On/Off
 * Boost mode
-* Notification when a state changes. 
+* Notification when a state changes.
+* Hardware-independent transport injection for deterministic tests.
+* Typed transport, timeout, packet, authentication and command errors.
+
+## Lifecycle and transport
+
+`DukaClient()` keeps the historical autostart behavior. New callers can own
+the lifecycle explicitly, which is recommended for applications that need
+deterministic startup and shutdown:
+
+```python
+from duka_smartfan_sdk import DukaClient
+
+client = DukaClient(autostart=False)
+client.start()
+try:
+    device = client.add_device("DEVICE_IDENTIFIER")
+finally:
+    client.close()
+```
+
+`close()` is idempotent. The client also supports a context manager. A custom
+`DatagramTransport` factory can be injected for tests; the default transport
+uses broadcast-capable UDP on port 4000.
+
+Connection health is exposed through `connection_state`, `is_healthy`,
+`last_error`, and `reconnect_attempts`. Reconnect uses a finite exponential
+backoff policy with a maximum delay and bounded jitter.
+
+## Development status
+
+The phase 2B hardening work is based on upstream commit
+`9442ba25dbbc599dbad4b3e7005d074a6ff455c5`. Tests do not require a fan,
+Home Assistant, HACS, or network access. See [HARDENING.md](HARDENING.md) for
+the provenance baseline, compatibility notes, checks, and remaining hardware
+verification.
  
 ## Example
 
@@ -40,3 +75,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this library.  If not, see <http://www.gnu.org/licenses/>.
 
+The README text above says GPL version 3 or later, while `pyproject.toml`
+currently declares `GPL-3.0-only`. Phase 2B does not choose between those
+expressions. The discrepancy must be resolved by the relevant rights holders
+before a release build, tag, PyPI publication, or Home Assistant Core
+dependency proposal.

@@ -18,12 +18,12 @@ class ResponsePacket(DukaPacket):
         0x08: 1,  # Current status of fan operation by humidity sensor 0-1 (off, on)
         0x0A: 1,  # Current status of fan operation by temperature sensor 0-1 (off, on)
         0x0B: 1,  # Current status of fan operation by motion sensor 0-1 (off, on)
-        0x0C: 1,  # Current status of fan operation by signal from an external switch 0-1 (off, on)
-        0x0D: 1,  # Current status of fan operation in interval ventilation mode 0-1 (off, on)
+        0x0C: 1,  # External-switch operation status
+        0x0D: 1,  # Interval-ventilation operation status
         0x0E: 1,  # Current status of fan operation in SILENT mode 0-1 (off, on)
-        0x0F: 1,  # Permission of operation based on humidity sensor readings 0-2 (off, automatic, manual)
-        0x11: 1,  # Permission of operation based on temperature sensor readings (off, on, invert)
-        0x12: 1,  # Permission of operation based on motion sensor readings (off, on, invert)
+        0x0F: 1,  # Humidity operation permission (off, automatic, manual)
+        0x11: 1,  # Temperature operation permission
+        0x12: 1,  # Motion operation permission
         0x13: 1,  # Permission of operation based on signal from an external switch
         0x14: 1,  # Humidity manual mode percentage (0-100)
         0x16: 1,  # Temperature mode temperature (18-36)

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import socket
+from collections.abc import Callable
 from socket import SO_BROADCAST, SO_REUSEADDR, SOL_SOCKET
 from typing import Protocol, runtime_checkable
 
@@ -87,7 +87,9 @@ class SocketDatagramTransport:
         except OSError as err:
             if self._socket is None:
                 raise TransportClosedError("UDP transport is closed") from err
-            raise DeviceUnreachableError(f"unable to send UDP datagram to {address[0]}") from err
+            raise DeviceUnreachableError(
+                f"unable to send UDP datagram to {address[0]}"
+            ) from err
 
     def receive(self, max_bytes: int = 1024) -> tuple[bytes, Address]:
         """Receive one datagram with a bounded socket timeout."""
@@ -96,7 +98,7 @@ class SocketDatagramTransport:
             raise TransportClosedError("UDP transport is closed")
         try:
             data, address = udp_socket.recvfrom(max_bytes)
-        except socket.timeout as err:
+        except TimeoutError as err:
             raise DukaTimeoutError("UDP receive timed out") from err
         except OSError as err:
             if self._socket is None:

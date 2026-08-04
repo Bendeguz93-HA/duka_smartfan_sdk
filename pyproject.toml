@@ -24,7 +24,37 @@ test = [
     "pytest>=8.3,<9",
     "pytest-cov>=6,<7",
 ]
+dev = [
+    "build>=1.2,<2",
+    "mypy>=1.15,<2",
+    "pytest>=8.3,<9",
+    "pytest-cov>=6,<7",
+    "ruff>=0.11,<1",
+]
+
+[tool.setuptools.package-data]
+duka_smartfan_sdk = ["py.typed"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["duka_smartfan_sdk"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+
+[tool.mypy]
+files = ["duka_smartfan_sdk"]
+python_version = "3.12"
+strict = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "SIM", "UP"]

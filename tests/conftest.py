@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections import deque
-import socket
 import threading
+from collections import deque
 from typing import TYPE_CHECKING
 
 import pytest
@@ -59,7 +58,7 @@ class FakeSocket:
             if not self._responses:
                 self._response_ready.clear()
             return response
-        raise socket.timeout
+        raise TimeoutError
 
     def queue_response(
         self, data: bytes, address: tuple[str, int] = ("192.0.2.10", 4000)
@@ -82,9 +81,7 @@ class FakeTransport:
         self.open_calls = 0
         self.close_calls = 0
         self.sent: list[tuple[bytes, tuple[str, int]]] = []
-        self.receive_events: deque[
-            tuple[bytes, tuple[str, int]] | Exception
-        ] = deque()
+        self.receive_events: deque[tuple[bytes, tuple[str, int]] | Exception] = deque()
         self.open_error: Exception | None = None
         self.send_error: Exception | None = None
         self._closed = threading.Event()
@@ -105,9 +102,7 @@ class FakeTransport:
             raise self.send_error
         self.sent.append((bytes(data), address))
 
-    def receive(
-        self, _max_bytes: int = 1024
-    ) -> tuple[bytes, tuple[str, int]]:
+    def receive(self, _max_bytes: int = 1024) -> tuple[bytes, tuple[str, int]]:
         """Return a queued event or a short deterministic timeout."""
         if not self.is_open:
             raise TransportClosedError("fake transport is closed")

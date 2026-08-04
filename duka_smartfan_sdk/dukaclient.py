@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from enum import Enum
 import logging
 import random
 import threading
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
 
 from .device import ChangeCallback, Device
 from .dukapacket import DukaPacket
@@ -31,7 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 FoundDeviceCallback = Callable[[str], None]
 
 
-class ConnectionState(str, Enum):
+class ConnectionState(StrEnum):
     """Observable lifecycle and transport health state."""
 
     STOPPED = "stopped"
@@ -65,15 +65,15 @@ class ReconnectPolicy:
         """Return the capped delay before the next attempt."""
         if attempt < 1:
             raise ValueError("attempt must be at least one")
-        base_delay = min(
+        base_delay: float = min(
             self.maximum_delay,
-            self.initial_delay * (2 ** (attempt - 1)),
+            self.initial_delay * (2.0 ** (attempt - 1)),
         )
         if self.jitter_ratio == 0 or base_delay == 0:
             return base_delay
         value = random.random() if random_value is None else random_value
         jitter = base_delay * self.jitter_ratio * ((2 * value) - 1)
-        return max(0.0, min(self.maximum_delay, base_delay + jitter))
+        return float(max(0.0, min(self.maximum_delay, base_delay + jitter)))
 
 
 class DukaClient:
@@ -181,7 +181,9 @@ class DukaClient:
             self._close_transport()
 
         if thread is not None and thread is not threading.current_thread():
-            join_timeout = timeout if timeout is not None else self._socket_timeout + 1.0
+            join_timeout = (
+                timeout if timeout is not None else self._socket_timeout + 1.0
+            )
             thread.join(join_timeout)
             if thread.is_alive():
                 error = DukaTimeoutError("listener thread did not stop before timeout")
@@ -192,7 +194,7 @@ class DukaClient:
         self._release_callbacks()
         self._state = ConnectionState.CLOSED
 
-    def __enter__(self) -> "DukaClient":
+    def __enter__(self) -> DukaClient:
         """Start and return the client for context-manager use."""
         self.start()
         return self
@@ -221,7 +223,9 @@ class DukaClient:
 
     def remove_device(self, device_id: str | Device) -> Device | None:
         """Remove a device by ID or object and return it when present."""
-        resolved_id = device_id.device_id if isinstance(device_id, Device) else device_id
+        resolved_id = (
+            device_id.device_id if isinstance(device_id, Device) else device_id
+        )
         with self._devices_lock:
             return self._devices.pop(resolved_id, None)
 

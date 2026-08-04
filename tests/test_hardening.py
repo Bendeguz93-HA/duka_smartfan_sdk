@@ -7,6 +7,7 @@ import threading
 import time
 
 import pytest
+from conftest import FakeTransport
 
 from duka_smartfan_sdk import (
     AuthenticationError,
@@ -21,9 +22,6 @@ from duka_smartfan_sdk import (
     TransportClosedError,
 )
 from duka_smartfan_sdk.responsepacket import ResponsePacket
-
-from conftest import FakeTransport
-
 
 DEVICE_ID = "1234567890123456"
 
@@ -98,10 +96,9 @@ def test_context_manager_closes_after_exception() -> None:
         socket_timeout=0.05,
     )
 
-    with pytest.raises(RuntimeError, match="cancel work"):
-        with client:
-            wait_until(lambda: client.is_healthy)
-            raise RuntimeError("cancel work")
+    with pytest.raises(RuntimeError, match="cancel work"), client:
+        wait_until(lambda current=client: current.is_healthy)
+        raise RuntimeError("cancel work")
 
     assert client.connection_state is ConnectionState.CLOSED
     assert client._notifythread is not None
@@ -219,9 +216,11 @@ def test_reconnect_stops_at_maximum_without_log_spam(
     with caplog.at_level(logging.WARNING):
         client.start()
         wait_until(
-            lambda: client.connection_state is ConnectionState.DEGRADED
-            and client._notifythread is not None
-            and not client._notifythread.is_alive()
+            lambda: (
+                client.connection_state is ConnectionState.DEGRADED
+                and client._notifythread is not None
+                and not client._notifythread.is_alive()
+            )
         )
 
     assert calls == 3
@@ -239,7 +238,7 @@ def test_repeated_clients_leave_no_listener_threads() -> None:
             transport_factory=lambda transport=transport: transport,
             socket_timeout=0.05,
         )
-        wait_until(lambda: client.is_healthy)
+        wait_until(lambda current=client: current.is_healthy)
         client.close()
 
     leaked = [

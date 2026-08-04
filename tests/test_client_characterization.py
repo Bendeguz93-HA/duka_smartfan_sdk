@@ -8,19 +8,16 @@ import time
 from typing import Any
 
 import pytest
+from conftest import FakeSocket
 
 from duka_smartfan_sdk.device import Device
 from duka_smartfan_sdk.dukaclient import DukaClient
 from duka_smartfan_sdk.responsepacket import ResponsePacket
 
-from conftest import FakeSocket
-
-
 DEVICE_ID = "1234567890123456"
 PASSWORD = "1111"
 SEARCH_RESPONSE = bytes.fromhex(
-    "fdfd0210554e4b4e4f574e44455649434530303000067c"
-    "464f554e4444455649434530303030312109"
+    "fdfd0210554e4b4e4f574e44455649434530303000067c464f554e4444455649434530303030312109"
 )
 
 
