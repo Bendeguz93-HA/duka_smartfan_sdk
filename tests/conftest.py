@@ -9,6 +9,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from duka_smartfan_sdk.exceptions import (
+    DeviceUnreachableError,
+    DukaTimeoutError,
+    TransportClosedError,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -68,12 +74,69 @@ class FakeSocket:
         self._response_ready.set()
 
 
+class FakeTransport:
+    """Injectable transport with deterministic responses and failures."""
+
+    def __init__(self) -> None:
+        self.is_open = False
+        self.open_calls = 0
+        self.close_calls = 0
+        self.sent: list[tuple[bytes, tuple[str, int]]] = []
+        self.receive_events: deque[
+            tuple[bytes, tuple[str, int]] | Exception
+        ] = deque()
+        self.open_error: Exception | None = None
+        self.send_error: Exception | None = None
+        self._closed = threading.Event()
+
+    def open(self) -> None:
+        """Open the fake or raise its configured failure."""
+        self.open_calls += 1
+        if self.open_error is not None:
+            raise self.open_error
+        self._closed.clear()
+        self.is_open = True
+
+    def send(self, data: bytes | bytearray, address: tuple[str, int]) -> None:
+        """Record a datagram or raise its configured failure."""
+        if not self.is_open:
+            raise TransportClosedError("fake transport is closed")
+        if self.send_error is not None:
+            raise self.send_error
+        self.sent.append((bytes(data), address))
+
+    def receive(
+        self, _max_bytes: int = 1024
+    ) -> tuple[bytes, tuple[str, int]]:
+        """Return a queued event or a short deterministic timeout."""
+        if not self.is_open:
+            raise TransportClosedError("fake transport is closed")
+        if self.receive_events:
+            event = self.receive_events.popleft()
+            if isinstance(event, Exception):
+                raise event
+            return event
+        if self._closed.wait(0.001):
+            raise TransportClosedError("fake transport is closed")
+        raise DukaTimeoutError("fake receive timed out")
+
+    def close(self) -> None:
+        """Close idempotently and wake the receiver."""
+        self.close_calls += 1
+        self.is_open = False
+        self._closed.set()
+
+    def fail_unreachable(self) -> None:
+        """Configure subsequent sends to fail as unreachable."""
+        self.send_error = DeviceUnreachableError("fake device unreachable")
+
+
 @pytest.fixture
 def fake_socket(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeSocket]:
     """Replace UDP sockets before a client can start its listener thread."""
     instance = FakeSocket()
     monkeypatch.setattr(
-        "duka_smartfan_sdk.dukaclient.socket.socket",
+        "duka_smartfan_sdk.transport.socket.socket",
         lambda *_args, **_kwargs: instance,
     )
     yield instance

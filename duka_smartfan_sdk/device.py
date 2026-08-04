@@ -2,7 +2,9 @@
 
 import asyncio
 import time
-from typing import Callable
+from collections.abc import Callable
+
+ChangeCallback = Callable[["Device"], None]
 
 
 class Device:
@@ -13,8 +15,8 @@ class Device:
         deviceid: str,
         password: str | None = None,
         ip_address: str = "<broadcast>",
-        onchange: Callable[["Device"], None] | None = None,
-    ):
+        onchange: ChangeCallback | None = None,
+    ) -> None:
         self._id = deviceid
         self._password = password
         self._ip_address = ip_address
@@ -76,6 +78,7 @@ class Device:
 
     @property
     def unit_type(self) -> int | None:
+        """Return the device unit type."""
         return self._unit_type
 
     def is_initialized(self) -> bool:
@@ -86,12 +89,18 @@ class Device:
         """
         return self.firmware_version is not None
 
-    def wait_for_initialize(self) -> None:
-        timeout = time.time() + 2
-        while self.firmware_version is None and time.time() < timeout:
-            time.sleep(0.1)
+    def wait_for_initialize(
+        self, timeout: float = 2.0, poll_interval: float = 0.1
+    ) -> None:
+        """Wait synchronously for firmware data using a monotonic deadline."""
+        deadline = time.monotonic() + timeout
+        while self.firmware_version is None and time.monotonic() < deadline:
+            time.sleep(poll_interval)
 
-    async def wait_for_initialize_async(self) -> None:
-        timeout = time.time() + 2
-        while self.firmware_version is None and time.time() < timeout:
-            await asyncio.sleep(0.1)
+    async def wait_for_initialize_async(
+        self, timeout: float = 2.0, poll_interval: float = 0.1
+    ) -> None:
+        """Wait asynchronously for firmware data using a monotonic deadline."""
+        deadline = time.monotonic() + timeout
+        while self.firmware_version is None and time.monotonic() < deadline:
+            await asyncio.sleep(poll_interval)

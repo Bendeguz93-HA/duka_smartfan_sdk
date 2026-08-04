@@ -136,6 +136,11 @@ def test_validation_success_and_cleanup(monkeypatch: pytest.MonkeyPatch) -> None
     """Validation returns a responding device and removes its temporary entry."""
     client = DukaClient.__new__(DukaClient)
     client._devices = {}
+    client._devices_lock = threading.RLock()
+    client._validation_timeout = 4.0
+    client._monotonic = time.monotonic
+    client._stop_event = threading.Event()
+    client._last_error = None
 
     def add_device(
         device_id: str,
@@ -150,7 +155,7 @@ def test_validation_success_and_cleanup(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(client, "add_device", add_device)
     monkeypatch.setattr(
         client,
-        "_DukaClient__update_device_status",
+        "_update_device_status",
         lambda device: setattr(device, "_unit_type", 1),
     )
 
@@ -165,14 +170,19 @@ def test_validation_timeout_returns_none(monkeypatch: pytest.MonkeyPatch) -> Non
     """The legacy validation API returns None after its bounded wait."""
     client = DukaClient.__new__(DukaClient)
     client._devices = {}
+    client._devices_lock = threading.RLock()
+    client._validation_timeout = 4.0
+    client._last_error = None
     clock = 0.0
 
     def now() -> float:
         return clock
 
-    def sleep(duration: float) -> None:
-        nonlocal clock
-        clock += duration
+    class AdvancingEvent:
+        def wait(self, duration: float) -> bool:
+            nonlocal clock
+            clock += duration
+            return False
 
     def add_device(
         device_id: str,
@@ -185,12 +195,12 @@ def test_validation_timeout_returns_none(monkeypatch: pytest.MonkeyPatch) -> Non
         return device
 
     monkeypatch.setattr(client, "add_device", add_device)
-    monkeypatch.setattr(client, "_DukaClient__update_device_status", lambda _device: None)
-    monkeypatch.setattr("duka_smartfan_sdk.dukaclient.time.time", now)
-    monkeypatch.setattr("duka_smartfan_sdk.dukaclient.time.sleep", sleep)
+    monkeypatch.setattr(client, "_update_device_status", lambda _device: None)
+    client._monotonic = now
+    client._stop_event = AdvancingEvent()
 
     assert client.validate_device(DEVICE_ID, PASSWORD) is None
-    assert clock > 4.0
+    assert clock >= 4.0
     assert client.get_device_count() == 0
 
 

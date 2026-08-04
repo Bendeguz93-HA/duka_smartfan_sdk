@@ -1,5 +1,7 @@
-"""Implements a class for the UDP data packet"""
+"""Implements a class for the UDP data packet."""
+
 from enum import Enum
+from typing import Final
 
 from .device import Device
 
@@ -64,19 +66,19 @@ class DukaPacket:
         WIFI_MODULE_IP_ADDRESS = 0xA3
         UNIT_TYPE = 0xB9
 
-    def __init__(self):
-        self._data = None
+    def __init__(self) -> None:
+        self._data = bytearray()
         self._pos = 0
-        self.maxsize = 200
+        self.maxsize: Final = 200
 
-    def initialize_search_cmd(self):
+    def initialize_search_cmd(self) -> None:
         """Initialize a search command packet"""
         self.__build_data("DEFAULT_DEVICEID", "")
         self.__add_byte(DukaPacket.Func.READ.value)
         self.__add_byte(DukaPacket.Parameters.DEVICE_SEARCH.value)
         self.__add_checksum()
 
-    def initialize_on_cmd(self, device: Device):
+    def initialize_on_cmd(self, device: Device) -> None:
         """Initialize a ON command packet to be sent to a device"""
         self.__build_data(device.device_id, device.password)
         self.__add_byte(DukaPacket.Func.WRITEREAD.value)
@@ -84,7 +86,7 @@ class DukaPacket:
         self.__add_byte(0x01)
         self.__add_checksum()
 
-    def initialize_off_cmd(self, device: Device):
+    def initialize_off_cmd(self, device: Device) -> None:
         """Initialize a Off command packet to be sent to a device"""
         self.__build_data(device.device_id, device.password)
         self.__add_byte(DukaPacket.Func.WRITEREAD.value)
@@ -92,7 +94,7 @@ class DukaPacket:
         self.__add_byte(0x00)
         self.__add_checksum()
 
-    def initialize_boost_toggle_cmd(self, device: Device):
+    def initialize_boost_toggle_cmd(self, device: Device) -> None:
         """Initialize a Boost toggle command packet to be sent to a device"""
         self.__build_data(device.device_id, device.password)
         self.__add_byte(DukaPacket.Func.WRITEREAD.value)
@@ -100,7 +102,7 @@ class DukaPacket:
         self.__add_byte(0x02)
         self.__add_checksum()
 
-    def initialize_boost_on_cmd(self, device: Device):
+    def initialize_boost_on_cmd(self, device: Device) -> None:
         """Initialize a Boost on command packet to be sent to a device"""
         self.__build_data(device.device_id, device.password)
         self.__add_byte(DukaPacket.Func.WRITEREAD.value)
@@ -108,7 +110,7 @@ class DukaPacket:
         self.__add_byte(0x01)
         self.__add_checksum()
 
-    def initialize_boost_off_cmd(self, device: Device):
+    def initialize_boost_off_cmd(self, device: Device) -> None:
         """Initialize a Boost off command packet to be sent to a device"""
         self.__build_data(device.device_id, device.password)
         self.__add_byte(DukaPacket.Func.WRITEREAD.value)
@@ -116,7 +118,7 @@ class DukaPacket:
         self.__add_byte(0x00)
         self.__add_checksum()
 
-    def initialize_status_cmd(self, device: Device):
+    def initialize_status_cmd(self, device: Device) -> None:
         """Initialize a status command packet to be sent to a device"""
         self.__build_data(device.device_id, device.password)
         self.__add_byte(self.Func.READ.value)
@@ -129,7 +131,7 @@ class DukaPacket:
         self.__add_byte(self.Parameters.UNIT_TYPE.value)
         self.__add_checksum()
 
-    def initialize_get_firmware_cmd(self, device: Device):
+    def initialize_get_firmware_cmd(self, device: Device) -> None:
         """Initialize a get firmware command packet to be sent to a
         device"""
         self.__build_data(device.device_id, device.password)
@@ -139,16 +141,16 @@ class DukaPacket:
         self.__add_checksum()
 
     @property
-    def data(self):
+    def data(self) -> bytearray:
         """Return the data for the packet"""
         return self._data[0 : self._pos]
 
-    def __add_byte(self, byte: int):
+    def __add_byte(self, byte: int) -> None:
         """Add a byte to the packet"""
         self._data[self._pos] = byte
         self._pos += 1
 
-    def __build_data(self, device_id: str, password: str):
+    def __build_data(self, device_id: str, password: str) -> None:
         """Build a packet of the specified size"""
         self._data = bytearray(self.maxsize)
         self._pos = 0
@@ -162,17 +164,17 @@ class DukaPacket:
         for char in password:
             self.__add_byte(ord(char))
 
-    def __add_parameter(self, parameter: int, value):
+    def __add_parameter(self, parameter: int, value: int) -> None:
         self.__add_byte(parameter)
         self.__add_byte(value)
 
-    def __add_checksum(self):
+    def __add_checksum(self) -> None:
         """Add a checksum to the packet"""
         checksum = self.calc_checksum(self._pos)
         self.__add_byte(checksum & 0xFF)
         self.__add_byte(checksum >> 8)
 
-    def calc_checksum(self, size) -> int:
+    def calc_checksum(self, size: int) -> int:
         """Calculate the check sum for the packet"""
         checksum: int = 0
         for i in range(2, size):

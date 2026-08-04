@@ -1,6 +1,7 @@
 """Implements a class for the UDP data packet"""
 
 from .dukapacket import DukaPacket
+from .exceptions import MalformedPacketError
 
 
 class ResponsePacket(DukaPacket):
@@ -55,43 +56,56 @@ class ResponsePacket(DukaPacket):
         0xB9: 2,  # Unit type
     }
 
-    def __init__(self):
-        super(ResponsePacket, self).__init__()
-        self.device_id = None
-        self.device_password = None
-        self.is_on = None
-        self.battery_status = None
-        self.temperature = None
-        self.fan_speed = None
-        self.humidity = None
-        self.search_device_id = None
-        self.firmware_version = None
-        self.firmware_date = None
-        self.unit_type = None
+    def __init__(self) -> None:
+        super().__init__()
+        self.device_id: str | None = None
+        self.device_password: str | None = None
+        self.is_on: bool | None = None
+        self.battery_status: int | None = None
+        self.temperature: int | None = None
+        self.fan_speed: int | None = None
+        self.humidity: int | None = None
+        self.search_device_id: str | None = None
+        self.firmware_version: str | None = None
+        self.firmware_date: str | None = None
+        self.unit_type: int | None = None
 
-    def initialize_from_data(self, data) -> bool:
+    @classmethod
+    def parse(cls, data: bytes | bytearray) -> "ResponsePacket":
+        """Parse a response or raise :class:`MalformedPacketError`."""
+        packet = cls()
+        packet._initialize_or_raise(data)
+        return packet
+
+    def initialize_from_data(self, data: bytes | bytearray) -> bool:
         """Initialize a packet from data revieved from the device
         Returns False if the data is invalid
         """
         try:
-            self._data = data
-            size = len(data)
-            if size < 4 or not self.is_header_ok():
-                return False
-            checksum = self.calc_checksum(size - 2)
-            datachecksum = self._data[size - 2] + (self._data[size - 1] << 8)
-            if checksum != datachecksum:
-                return False
-            self.device_id = self.read_string()
-            self.device_password = self.read_string()
-            func = self.read_byte()
-            if func != self.Func.RESPONSE.value:
-                return False
-            return self.read_parameters()
-        except Exception:
+            self._initialize_or_raise(data)
+        except (IndexError, MalformedPacketError, TypeError, ValueError):
             return False
+        return True
 
-    def is_header_ok(self):
+    def _initialize_or_raise(self, data: bytes | bytearray) -> None:
+        """Initialize internal fields from one validated datagram."""
+        self._data = bytearray(data)
+        self._pos = 0
+        size = len(data)
+        if size < 8 or not self.is_header_ok():
+            raise MalformedPacketError("invalid packet header or minimum length")
+        checksum = self.calc_checksum(size - 2)
+        data_checksum = self._data[size - 2] + (self._data[size - 1] << 8)
+        if checksum != data_checksum:
+            raise MalformedPacketError("packet checksum mismatch")
+        self.device_id = self.read_string()
+        self.device_password = self.read_string()
+        if self.read_byte() != self.Func.RESPONSE.value:
+            raise MalformedPacketError("packet is not a response")
+        if not self.read_parameters():
+            raise MalformedPacketError("packet contains an unknown parameter")
+
+    def is_header_ok(self) -> bool:
         if self.read_byte() != 0xFD or self.read_byte() != 0xFD:
             return False
         return self.read_byte() == 0x02
@@ -109,7 +123,7 @@ class ResponsePacket(DukaPacket):
         self._pos += strlen
         return txt
 
-    def debug_parameter(self, parameter, size) -> str:
+    def debug_parameter(self, parameter: int, size: int) -> str:
         return ", ".join(
             [
                 str(parameter),
@@ -130,6 +144,9 @@ class ResponsePacket(DukaPacket):
                 if parameter not in self.parameter_size:
                     return False
                 size = self.parameter_size[parameter]
+
+            if self._pos + size > len(self._data) - 2:
+                raise MalformedPacketError("parameter payload exceeds packet boundary")
 
             if parameter == self.Parameters.ON_OFF.value:
                 self.is_on = self._data[self._pos] != 0
