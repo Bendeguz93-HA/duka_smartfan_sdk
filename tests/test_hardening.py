@@ -230,6 +230,41 @@ def test_reconnect_stops_at_maximum_without_log_spam(
     client.close()
 
 
+def test_close_cancels_reconnect_backoff() -> None:
+    """Shutdown interrupts a pending reconnect delay without waiting for it."""
+    connection_attempted = threading.Event()
+    calls = 0
+
+    def factory() -> FakeTransport:
+        nonlocal calls
+        calls += 1
+        connection_attempted.set()
+        raise DeviceUnreachableError("offline")
+
+    client = DukaClient(
+        transport_factory=factory,
+        autostart=False,
+        socket_timeout=0.05,
+        reconnect_policy=ReconnectPolicy(
+            max_attempts=5,
+            initial_delay=30,
+            maximum_delay=30,
+            jitter_ratio=0,
+        ),
+    )
+    client.start()
+    assert connection_attempted.wait(1.0)
+
+    started = time.monotonic()
+    client.close(timeout=0.5)
+
+    assert time.monotonic() - started < 0.5
+    assert calls == 1
+    assert client.connection_state is ConnectionState.CLOSED
+    assert client._notifythread is not None
+    assert client._notifythread.is_alive() is False
+
+
 def test_repeated_clients_leave_no_listener_threads() -> None:
     """Start/close cycles do not leak the owned non-main listener resource."""
     for _ in range(20):
