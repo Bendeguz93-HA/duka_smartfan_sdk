@@ -180,19 +180,23 @@ class DukaClient:
             self._stop_event.set()
             self._close_transport()
 
-        if thread is not None and thread is not threading.current_thread():
-            join_timeout = (
-                timeout if timeout is not None else self._socket_timeout + 1.0
-            )
-            thread.join(join_timeout)
-            if thread.is_alive():
-                error = DukaTimeoutError("listener thread did not stop before timeout")
-                self._last_error = error
-                self._state = ConnectionState.DEGRADED
-                raise error
+        try:
+            if thread is not None and thread is not threading.current_thread():
+                join_timeout = (
+                    timeout if timeout is not None else self._socket_timeout + 1.0
+                )
+                thread.join(join_timeout)
+                if thread.is_alive():
+                    error = DukaTimeoutError(
+                        "listener thread did not stop before timeout"
+                    )
+                    self._last_error = error
+                    self._state = ConnectionState.DEGRADED
+                    raise error
 
-        self._release_callbacks()
-        self._state = ConnectionState.CLOSED
+            self._state = ConnectionState.CLOSED
+        finally:
+            self._release_callbacks()
 
     def __enter__(self) -> DukaClient:
         """Start and return the client for context-manager use."""
@@ -458,18 +462,20 @@ class DukaClient:
                 self._state = ConnectionState.STOPPED
 
     def _handle_packet(self, packet: ResponsePacket, ip_address: str) -> None:
+        search_device_id = packet.search_device_id
+        callback = self._found_device_callback
+        if search_device_id is not None and callback is not None:
+            try:
+                callback(search_device_id)
+            except Exception:  # callbacks are application-owned
+                _LOGGER.exception("device discovery callback failed")
+
         device_id = packet.device_id
         if device_id is None:
             return
         with self._devices_lock:
             device = self._devices.get(device_id)
         if device is None:
-            callback = self._found_device_callback
-            if packet.search_device_id is not None and callback is not None:
-                try:
-                    callback(packet.search_device_id)
-                except Exception:  # callbacks are application-owned
-                    _LOGGER.exception("device discovery callback failed")
             return
         self.update_device(device, ip_address, packet)
 

@@ -24,6 +24,10 @@ from duka_smartfan_sdk import (
 from duka_smartfan_sdk.responsepacket import ResponsePacket
 
 DEVICE_ID = "1234567890123456"
+SEARCH_DEVICE_ID = "FOUNDDEVICE00001"
+SEARCH_RESPONSE = bytes.fromhex(
+    "fdfd0210554e4b4e4f574e44455649434530303000067c464f554e4444455649434530303030312109"
+)
 
 
 def wait_until(predicate: object, timeout: float = 1.0) -> None:
@@ -33,6 +37,38 @@ def wait_until(predicate: object, timeout: float = 1.0) -> None:
         if time.monotonic() >= deadline:
             pytest.fail("condition was not reached before timeout")
         time.sleep(0.001)
+
+
+class NonCooperativeTransport:
+    """Transport that stays in receive until the test explicitly releases it."""
+
+    def __init__(self) -> None:
+        self.is_open = False
+        self.receiving = threading.Event()
+        self._release = threading.Event()
+
+    def open(self) -> None:
+        """Open the transport."""
+        self.is_open = True
+
+    def send(self, _data: bytes | bytearray, _address: tuple[str, int]) -> None:
+        """Accept outgoing packets while open."""
+        if not self.is_open:
+            raise TransportClosedError("non-cooperative transport is closed")
+
+    def receive(self, _max_bytes: int = 1024) -> tuple[bytes, tuple[str, int]]:
+        """Block even after close until the test releases the transport."""
+        self.receiving.set()
+        self._release.wait()
+        raise TransportClosedError("non-cooperative transport was released")
+
+    def close(self) -> None:
+        """Mark closed without unblocking receive."""
+        self.is_open = False
+
+    def release(self) -> None:
+        """Allow the blocked receive call to finish."""
+        self._release.set()
 
 
 @pytest.mark.parametrize(
@@ -57,6 +93,92 @@ def test_response_parse_raises_typed_malformed_packet() -> None:
         ResponsePacket.parse(b"not a protocol packet")
 
     assert ResponsePacket().initialize_from_data(b"not a protocol packet") is False
+
+
+def test_discovery_without_device_id_calls_registered_callback() -> None:
+    """Discovery does not depend on a normal response device ID."""
+    found: list[str] = []
+    client = DukaClient(autostart=False)
+    client._found_device_callback = found.append
+    packet = ResponsePacket()
+    packet.device_id = None
+    packet.search_device_id = SEARCH_DEVICE_ID
+
+    client._handle_packet(packet, "192.0.2.10")
+
+    assert found == [SEARCH_DEVICE_ID]
+    assert client._found_device_callback is not None
+    client.close()
+
+
+def test_status_packet_still_updates_registered_device() -> None:
+    """Normal status handling remains independent from discovery handling."""
+    transport = FakeTransport()
+    client = DukaClient(
+        transport_factory=lambda: transport,
+        socket_timeout=0.05,
+        startup_timeout=0.2,
+    )
+    device = client.add_device(DEVICE_ID)
+    packet = ResponsePacket()
+    packet.device_id = DEVICE_ID
+    packet.fan_speed = 1234
+    packet.temperature = 23
+    packet.humidity = 55
+
+    client._handle_packet(packet, "192.0.2.20")
+
+    assert device.fan_speed == 1234
+    assert device.temperature == 23
+    assert device.humidity == 55
+    assert device.ip_address == "192.0.2.20"
+    client.close()
+
+
+def test_discovery_without_callback_is_harmless() -> None:
+    """An unsolicited discovery response is ignored safely."""
+    client = DukaClient(autostart=False)
+    packet = ResponsePacket()
+    packet.device_id = None
+    packet.search_device_id = SEARCH_DEVICE_ID
+
+    client._handle_packet(packet, "192.0.2.10")
+
+    assert client.connection_state is ConnectionState.STOPPED
+    client.close()
+
+
+def test_discovery_callback_exception_does_not_stop_listener(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Application callback failures are logged while discovery continues."""
+    transport = FakeTransport()
+    callback_failed = threading.Event()
+    callback_recovered = threading.Event()
+
+    def failing_callback(_device_id: str) -> None:
+        callback_failed.set()
+        raise RuntimeError("callback failed")
+
+    client = DukaClient(
+        transport_factory=lambda: transport,
+        socket_timeout=0.05,
+        startup_timeout=0.2,
+    )
+    try:
+        with caplog.at_level(logging.ERROR):
+            client.search_devices(failing_callback)
+            transport.receive_events.append((SEARCH_RESPONSE, ("192.0.2.10", 4000)))
+            assert callback_failed.wait(1.0)
+
+            client.search_devices(lambda _device_id: callback_recovered.set())
+            transport.receive_events.append((SEARCH_RESPONSE, ("192.0.2.11", 4000)))
+            assert callback_recovered.wait(1.0)
+
+        assert client.is_healthy
+        assert "device discovery callback failed" in caplog.text
+    finally:
+        client.close()
 
 
 def test_explicit_lifecycle_and_health_state() -> None:
@@ -122,6 +244,39 @@ def test_close_releases_registered_callbacks() -> None:
 
     assert device._changeevent is None
     assert client._found_device_callback is None
+
+
+def test_shutdown_timeout_releases_callbacks_and_can_finish_later() -> None:
+    """Timeout cleanup is final while a later close can reach CLOSED."""
+    transport = NonCooperativeTransport()
+    client = DukaClient(
+        transport_factory=lambda: transport,
+        socket_timeout=0.05,
+        startup_timeout=0.2,
+    )
+    assert transport.receiving.wait(1.0)
+    device = client.add_device(DEVICE_ID, onchange=lambda _device: None)
+    client.search_devices(lambda _device_id: None)
+
+    try:
+        with pytest.raises(DukaTimeoutError) as raised:
+            client.close(timeout=0.01)
+
+        assert client.last_error is raised.value
+        assert client.connection_state is ConnectionState.DEGRADED
+        assert device._changeevent is None
+        assert client._found_device_callback is None
+    finally:
+        transport.release()
+
+    def listener_stopped() -> bool:
+        thread = client._notifythread
+        return thread is not None and not thread.is_alive()
+
+    wait_until(listener_stopped)
+    client.close()
+
+    assert client.connection_state is ConnectionState.CLOSED
 
 
 def test_command_failure_uses_typed_error() -> None:
