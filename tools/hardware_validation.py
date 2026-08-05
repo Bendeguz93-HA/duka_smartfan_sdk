@@ -209,8 +209,10 @@ def _run_write_test(
             boost_started = True
             threshold = max(100, int(baseline * 0.20))
             boosted = _wait_until(
-                lambda: device.fan_speed is not None
-                and device.fan_speed >= baseline + threshold,
+                lambda: (
+                    device.fan_speed is not None
+                    and device.fan_speed >= baseline + threshold
+                ),
                 timeout,
             )
             peak = device.fan_speed
@@ -227,9 +229,11 @@ def _run_write_test(
             client.turn_boost_off(device)
             boost_started = False
             boost_cleared = _wait_until(
-                lambda: peak is not None
-                and device.fan_speed is not None
-                and device.fan_speed <= peak - threshold,
+                lambda: (
+                    peak is not None
+                    and device.fan_speed is not None
+                    and device.fan_speed <= peak - threshold
+                ),
                 timeout,
             )
             steps.append(
@@ -347,11 +351,13 @@ def main() -> int:
 
         device = client.add_device(device_id, password, onchange=on_change)
         telemetry_ready = _wait_until(
-            lambda: device.firmware_version is not None
-            and device.unit_type is not None
-            and device.fan_speed is not None
-            and device.temperature is not None
-            and device.humidity is not None,
+            lambda: (
+                device.firmware_version is not None
+                and device.unit_type is not None
+                and device.fan_speed is not None
+                and device.temperature is not None
+                and device.humidity is not None
+            ),
             args.status_timeout,
         )
         report["telemetry"] = {
