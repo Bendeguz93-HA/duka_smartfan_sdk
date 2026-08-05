@@ -17,7 +17,10 @@ production SDK behavior.
 - Do not run the SDK test client at the same time as the Home Assistant DUKA
   integration. Both use UDP port 4000 and simultaneous clients make evidence
   ambiguous.
+- The tool refuses to run unless `--ha-integration-disabled` is supplied after
+  the operator has disabled the integration for the test window.
 - Read-only validation must pass before any state-changing command is allowed.
+  The tool will skip all requested writes automatically if Stage A fails.
 - Boost validation is optional and is allowed only when boost is known to be
   off before the test and the fan is initially on.
 - Network-loss validation is a separate manual step. The script never changes
@@ -86,8 +89,8 @@ Immediately before running the script:
 2. Turn off `input_boolean.bad_fan_controller_aktiv`.
 3. Disable only the DUKA SmartFan integration under
    **Settings → Devices & services**.
-4. Confirm that its entities become unavailable and that no DUKA automation is
-   still issuing commands.
+4. Wait a few seconds, then confirm that its entities become unavailable and
+   that no DUKA automation is still issuing commands.
 5. Keep the DUKA app available as the independent recovery path.
 
 Do not delete the integration, remove entities, edit YAML, restart Home
@@ -101,7 +104,7 @@ SDK's inherited default.
 
 ```shell
 cd /share/duka_hardware_validation/sdk
-uv run python tools/hardware_validation.py
+uv run python tools/hardware_validation.py --ha-integration-disabled
 ```
 
 Expected evidence:
@@ -128,13 +131,19 @@ unexpectedly.
 Run this only after Stage A passes and while observing the physical fan:
 
 ```shell
-uv run python tools/hardware_validation.py --write-test
+uv run python tools/hardware_validation.py \
+  --ha-integration-disabled \
+  --write-test
 ```
 
 The program refuses to change state until the exact phrase
 `CHANGE FAN STATE` is entered. It changes the fan to the opposite on/off state,
 observes the result, and then restores the initial on/off state. It performs a
 second restoration attempt in a `finally` block.
+
+Even when `--write-test` is supplied, the tool records the write stage as
+`executed: false` and sends no state-changing command if the read-only stage
+fails.
 
 Stop and use the DUKA app if the physical state and reported state disagree.
 
@@ -145,6 +154,7 @@ off:
 
 ```shell
 uv run python tools/hardware_validation.py \
+  --ha-integration-disabled \
   --write-test \
   --include-boost \
   --initial-boost-off
