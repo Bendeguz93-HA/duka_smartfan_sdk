@@ -95,6 +95,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--discovery-seconds", type=float, default=5.0)
     parser.add_argument("--status-timeout", type=float, default=12.0)
     parser.add_argument(
+        "--ha-integration-disabled",
+        action="store_true",
+        help="Attest that the HA DUKA integration is disabled for this test window.",
+    )
+    parser.add_argument(
         "--write-test",
         action="store_true",
         help="Run a reversible on/off command test after read-only validation.",
@@ -147,6 +152,7 @@ def _run_write_test(
     steps: list[dict[str, Any]] = []
     write_report: dict[str, Any] = {
         "requested": True,
+        "executed": True,
         "initial_state": initial,
         "steps": steps,
         "restoration_attempted": False,
@@ -252,7 +258,7 @@ def _run_write_test(
         if boost_started:
             try:
                 client.turn_boost_off(device)
-            except DukaSmartFanError as error:
+            except Exception as error:
                 restoration_errors.append(type(error).__name__)
                 write_passed = False
 
@@ -261,7 +267,7 @@ def _run_write_test(
                 client.turn_on(device)
             else:
                 client.turn_off(device)
-        except DukaSmartFanError as error:
+        except Exception as error:
             restoration_errors.append(type(error).__name__)
             write_passed = False
 
@@ -278,6 +284,13 @@ def _run_write_test(
 
 def main() -> int:
     args = _parse_args()
+    if not args.ha_integration_disabled:
+        print(
+            "Refusing to run: disable the HA DUKA integration, then pass "
+            "--ha-integration-disabled.",
+            file=sys.stderr,
+        )
+        return 2
     if args.include_boost and not args.write_test:
         print("--include-boost requires --write-test", file=sys.stderr)
         return 2
@@ -300,6 +313,7 @@ def main() -> int:
         "expected_sdk_merge": EXPECTED_SDK_MERGE,
         "device_id_sha256_prefix": _hash_identifier(device_id),
         "mode": "write" if args.write_test else "read-only",
+        "ha_integration_disabled_attested": True,
         "secrets_recorded": False,
         "raw_device_id_recorded": False,
         "ip_address_recorded": False,
@@ -326,6 +340,7 @@ def main() -> int:
         expected_hash = _hash_identifier(device_id)
         report["discovery"] = {
             "window_seconds": args.discovery_seconds,
+            "discovered_device_count": len(discovered),
             "discovered_device_hashes": sorted(discovered),
             "expected_device_found": expected_hash in discovered,
         }
@@ -366,11 +381,19 @@ def main() -> int:
             "observed": _device_snapshot(device),
         }
 
-        discovery_passed = report["discovery"]["expected_device_found"]
-        if not discovery_passed or not telemetry_ready:
+        discovery_passed = bool(report["discovery"]["expected_device_found"])
+        read_only_passed = discovery_passed and telemetry_ready
+        report["read_only_passed"] = read_only_passed
+        if not read_only_passed:
             exit_code = 2
 
-        if args.write_test:
+        if args.write_test and not read_only_passed:
+            report["write_test"] = {
+                "requested": True,
+                "executed": False,
+                "reason": "read_only_stage_failed",
+            }
+        elif args.write_test:
             write_passed = _run_write_test(
                 client,
                 device,
