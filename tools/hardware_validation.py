@@ -67,7 +67,8 @@ def _wait_until(
 def _default_output_path() -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     share_root = Path("/share/duka_hardware_validation/results")
-    root = share_root if Path("/share").is_dir() else Path("hardware_validation_results")
+    local_root = Path("hardware_validation_results")
+    root = share_root if Path("/share").is_dir() else local_root
     return root / f"phase_2c_{stamp}.json"
 
 
@@ -144,12 +145,14 @@ def _run_write_test(
         raise RuntimeError("write test confirmation was not provided")
 
     steps: list[dict[str, Any]] = []
-    report["write_test"] = {
+    write_report: dict[str, Any] = {
         "requested": True,
         "initial_state": initial,
         "steps": steps,
         "restoration_attempted": False,
+        "restoration_error_types": [],
     }
+    report["write_test"] = write_report
 
     opposite = not initial_active
     write_passed = True
@@ -239,15 +242,32 @@ def _run_write_test(
             )
             write_passed &= boost_cleared
     finally:
-        report["write_test"]["restoration_attempted"] = True
+        write_report["restoration_attempted"] = True
+        restoration_errors: list[str] = write_report["restoration_error_types"]
+
         if boost_started:
-            client.turn_boost_off(device)
-        if initial_active:
-            client.turn_on(device)
-        else:
-            client.turn_off(device)
-        _wait_until(lambda: device.is_active is initial_active, timeout)
-        report["write_test"]["final_state"] = _device_snapshot(device)
+            try:
+                client.turn_boost_off(device)
+            except DukaSmartFanError as error:
+                restoration_errors.append(type(error).__name__)
+                write_passed = False
+
+        try:
+            if initial_active:
+                client.turn_on(device)
+            else:
+                client.turn_off(device)
+        except DukaSmartFanError as error:
+            restoration_errors.append(type(error).__name__)
+            write_passed = False
+
+        restored_finally = _wait_until(
+            lambda: device.is_active is initial_active,
+            timeout,
+        )
+        write_passed &= restored_finally
+        write_report["final_state"] = _device_snapshot(device)
+        write_report["final_on_off_restored"] = restored_finally
 
     return write_passed
 
@@ -340,7 +360,8 @@ def main() -> int:
             "observed": _device_snapshot(device),
         }
 
-        if not report["discovery"]["expected_device_found"] or not telemetry_ready:
+        discovery_passed = report["discovery"]["expected_device_found"]
+        if not discovery_passed or not telemetry_ready:
             exit_code = 2
 
         if args.write_test:
