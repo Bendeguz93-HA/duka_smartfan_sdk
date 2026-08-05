@@ -37,7 +37,10 @@ uses broadcast-capable UDP on port 4000.
 
 Connection health is exposed through `connection_state`, `is_healthy`,
 `last_error`, and `reconnect_attempts`. Reconnect uses a finite exponential
-backoff policy with a maximum delay and bounded jitter.
+backoff policy with a maximum delay and bounded jitter. `is_healthy` means
+only that the client's local UDP transport is open; it does not prove that a
+remote fan is reachable or responding. Remote responsiveness requires a
+successful response or higher-level validation.
 
 ## Development status
 

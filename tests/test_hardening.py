@@ -71,6 +71,42 @@ class NonCooperativeTransport:
         self._release.set()
 
 
+class CloseFailingTransport:
+    """Transport whose close fails after releasing its blocked receiver."""
+
+    def __init__(self) -> None:
+        self.is_open = False
+        self.receiving = threading.Event()
+        self._close_started = threading.Event()
+        self._allow_receive_exit = threading.Event()
+
+    def open(self) -> None:
+        """Open the transport."""
+        self.is_open = True
+
+    def send(self, _data: bytes | bytearray, _address: tuple[str, int]) -> None:
+        """Accept outgoing packets while open."""
+        if not self.is_open:
+            raise TransportClosedError("close-failing transport is closed")
+
+    def receive(self, _max_bytes: int = 1024) -> tuple[bytes, tuple[str, int]]:
+        """Block until close releases the receiver and the test permits exit."""
+        self.receiving.set()
+        self._close_started.wait()
+        self._allow_receive_exit.wait()
+        raise TransportClosedError("close-failing transport was released")
+
+    def close(self) -> None:
+        """Release the receiver, then preserve a transport-owned failure."""
+        self.is_open = False
+        self._close_started.set()
+        raise RuntimeError("transport close failed")
+
+    def allow_receive_exit(self) -> None:
+        """Allow the released receive call to terminate deterministically."""
+        self._allow_receive_exit.set()
+
+
 @pytest.mark.parametrize(
     "error_type",
     [
@@ -257,6 +293,8 @@ def test_shutdown_timeout_releases_callbacks_and_can_finish_later() -> None:
     assert transport.receiving.wait(1.0)
     device = client.add_device(DEVICE_ID, onchange=lambda _device: None)
     client.search_devices(lambda _device_id: None)
+    assert device._changeevent is not None
+    assert client._found_device_callback is not None
 
     try:
         with pytest.raises(DukaTimeoutError) as raised:
@@ -268,6 +306,42 @@ def test_shutdown_timeout_releases_callbacks_and_can_finish_later() -> None:
         assert client._found_device_callback is None
     finally:
         transport.release()
+
+    def listener_stopped() -> bool:
+        thread = client._notifythread
+        return thread is not None and not thread.is_alive()
+
+    wait_until(listener_stopped)
+    client.close()
+
+    assert client.connection_state is ConnectionState.CLOSED
+
+
+def test_transport_close_failure_releases_callbacks_and_can_finish_later() -> None:
+    """Transport close failures cannot retain application callbacks."""
+    transport = CloseFailingTransport()
+    client = DukaClient(
+        transport_factory=lambda: transport,
+        socket_timeout=0.05,
+        startup_timeout=0.2,
+    )
+    assert transport.receiving.wait(1.0)
+    device = client.add_device(DEVICE_ID, onchange=lambda _device: None)
+    client.search_devices(lambda _device_id: None)
+    assert device._changeevent is not None
+    assert client._found_device_callback is not None
+
+    try:
+        with pytest.raises(RuntimeError, match="transport close failed"):
+            client.close(timeout=0.01)
+
+        assert device._changeevent is None
+        assert client._found_device_callback is None
+        assert client.connection_state is ConnectionState.DEGRADED
+        assert client._notifythread is not None
+        assert client._notifythread.is_alive()
+    finally:
+        transport.allow_receive_exit()
 
     def listener_stopped() -> bool:
         thread = client._notifythread

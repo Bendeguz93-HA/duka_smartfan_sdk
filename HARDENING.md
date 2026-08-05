@@ -35,8 +35,24 @@ wire behavior.
 - bounded exponential reconnect with a maximum delay, bounded jitter, health
   state, and finite logging;
 - public API typing and a packaged `py.typed` marker;
-- lint, strict package typecheck, tests, coverage, package build check, and
-  public GitHub Actions CI without publishing credentials or steps.
+- Ruff format/lint, strict package typecheck, tests, coverage, package build
+  check, and public GitHub Actions CI without publishing credentials or steps.
+
+`is_healthy` reports only whether the client's local UDP transport is open.
+It does not prove that a remote fan is reachable or responding; remote
+responsiveness requires a successful response or higher-level validation.
+
+## CI reproducibility
+
+- uv is pinned to `0.12.1`, dependency resolution is committed in `uv.lock`,
+  and CI sync/run commands use frozen mode;
+- `actions/checkout` is pinned to immutable commit
+  `3d3c42e5aac5ba805825da76410c181273ba90b1` (`v7.0.1`);
+- `astral-sh/setup-uv` is pinned to immutable commit
+  `c771a70e6277c0a99b617c7a806ffedaca235ff9` (`v9.0.0`).
+
+Both pinned action releases declare a Node 24 runtime, replacing the reviewed
+Node 20 actions that GitHub had warned it was forcing to Node 24.
 
 ## Backward compatibility
 

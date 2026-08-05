@@ -134,7 +134,12 @@ class DukaClient:
 
     @property
     def is_healthy(self) -> bool:
-        """Return whether the transport is currently connected."""
+        """Return whether the local UDP transport is currently open.
+
+        This does not prove that a remote fan is reachable or responding.
+        Remote responsiveness requires a successful response or higher-level
+        validation.
+        """
         return self._state is ConnectionState.CONNECTED
 
     @property
@@ -171,16 +176,20 @@ class DukaClient:
         The method is idempotent. A custom transport that ignores ``close``
         and prevents the listener from terminating produces a typed timeout.
         """
-        with self._lifecycle_lock:
-            thread = self._notifythread
-            if self._closed and (thread is None or not thread.is_alive()):
-                return
-            self._closed = True
-            self._notifyrunning = False
-            self._stop_event.set()
-            self._close_transport()
-
         try:
+            with self._lifecycle_lock:
+                thread = self._notifythread
+                if self._closed and (thread is None or not thread.is_alive()):
+                    return
+                self._closed = True
+                self._notifyrunning = False
+                self._stop_event.set()
+                try:
+                    self._close_transport()
+                except Exception:
+                    self._state = ConnectionState.DEGRADED
+                    raise
+
             if thread is not None and thread is not threading.current_thread():
                 join_timeout = (
                     timeout if timeout is not None else self._socket_timeout + 1.0
