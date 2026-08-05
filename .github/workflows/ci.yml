@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - "hardening/**"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+          version: "0.12.1"
+
+      - name: Install development dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: Lint
+        run: uv run --frozen ruff check .
+
+      - name: Format
+        run: uv run --frozen ruff format --check .
+
+      - name: Typecheck
+        run: uv run --frozen mypy
+
+      - name: Test with coverage
+        run: >-
+          uv run --frozen pytest
+          --cov=duka_smartfan_sdk
+          --cov-report=term-missing
+          --cov-fail-under=85
+
+      - name: Build package without publishing
+        run: uv run --frozen python -m build
